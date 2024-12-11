@@ -1,30 +1,33 @@
 # TunnelProxy
 
-**TunnelProxy** 是一款高效且易于使用的端口转发工具，能够将远程服务器的端口映射到本地端口。它使开发人员能够安全地将远程服务隧道到本地计算机并像本地服务一样访问它们。该工具还支持 Chrome DevTools Inspector 进行实时调试，是远程服务测试和开发的完美解决方案。
+**TunnelProxy** is an efficient and easy-to-use tool for forwarding remote server ports to local ports. It enables developers to securely tunnel remote services to their local machine and access them as if they were running locally. The tool also supports Chrome DevTools Inspector for real-time debugging, making it a perfect solution for remote service testing and development.
 
-## 简介
+## Introduction
 
-TunnelProxy 简化了访问远程服务的过程，通过将远程端口映射到本地端口，避免了复杂的网络配置。它特别适用于需要与远程 API、数据库或 Web 应用进行交互的开发人员。通过支持 Chrome DevTools Inspector，您可以直接在本地机器上调试和优化远程服务，极大地提升开发效率。
+TunnelProxy simplifies the process of accessing remote services by mapping remote ports to local ports. It is especially useful for developers who need to interact with remote APIs, databases, or web applications without complex network configurations. The added support for Chrome DevTools Inspector allows you to debug and optimize your services directly on your local machine, streamlining your workflow.
 
-## 主要功能：
 
-- 🔌 **远程端口映射到本地**：通过 SSH 隧道将远程主机的端口映射到本地计算机，轻松访问远程服务。
-- 🖥️ **图形化界面**：简洁直观的用户界面，轻松配置远程主机、远程端口和本地端口。
-- ⏱️ **实时状态更新**：实时显示端口转发过程的状态，显示映射的成功或失败。
-- 🔐 **安全可靠**：使用 SSH 隧道技术，确保端口转发过程中的数据传输安全。
-- 🛠️ **支持 Chrome DevTools Inspector 调试**：支持通过 Chrome 开发者工具实时调试和检查映射到本地的远程端口。包括 HTTP 请求检查、JavaScript 调试、网络和性能分析等功能。
-- 🔄 **支持多端口转发**：支持将多个远程端口映射到不同的本地端口，方便同时处理多个远程服务。
+[中文版](./README-zh.md)
 
-## 使用场景：
+## Key Features:
 
-- 💻 **开发与调试**：轻松将远程服务映射到本地端口，利用 Chrome DevTools 进行调试和检查，提升开发效率。
-- 🌐 **远程服务管理**：将远程服务隧道到本地机器，便于进行本地管理和调试。
-- 🧪 **测试环境**：快速将远程服务映射到本地端口进行测试，减少配置网络的复杂性。
-- 🚀 **性能优化**：通过 Chrome 的性能分析工具调试和优化远程服务，提升服务性能。
+- 🔌 **Remote Port Mapping to Local**: Tunnel remote host ports to your local machine via SSH for easy access to remote services.
+- 🖥️ **Graphical User Interface**: A simple and intuitive GUI that allows you to easily configure the remote host, remote port, and local port.
+- ⏱️ **Real-Time Status Updates**: Displays the status of the port forwarding process in real-time, showing success or failure of the mapping.
+- 🔐 **Secure and Reliable**: Uses SSH tunneling to ensure secure data transmission during port forwarding.
+- 🛠️ **Chrome DevTools Inspector Support**: Allows you to use Chrome's Developer Tools to debug and inspect the locally mapped remote ports in real-time. This includes features like HTTP request inspection, JavaScript debugging, network and performance analysis.
+- 🔄 **Multiple Port Forwarding**: Supports mapping multiple remote ports to different local ports, allowing for the handling of multiple remote services simultaneously.
 
-## 为什么选择 TunnelProxy？
+## Use Cases:
 
-- ✅ **简单易用**：无需复杂配置，简洁直观的界面让你快速上手。
-- 🔒 **安全稳定**：使用 SSH 隧道技术，确保端口转发过程中的安全性和稳定性。
-- ⚙️ **实时调试**：通过 Chrome DevTools Inspector，您可以调试、检查和优化映射到本地的远程服务，优化开发流程。
-- ⏳ **节省时间**：无需手动配置服务器或网络，TunnelProxy 为您提供一个快速、安全的解决方案来映射远程服务到本地。
+- 💻 **Development & Debugging**: Easily map remote services to local ports and leverage Chrome DevTools to debug and inspect the remote application, improving your development process.
+- 🌐 **Remote Service Management**: Tunnel remote services to your local machine for easier management and debugging.
+- 🧪 **Testing Environment**: Quickly map remote services to local ports for testing, reducing the complexity of configuring networks.
+- 🚀 **Performance Optimization**: Use Chrome’s performance tools to debug and optimize remote services that are mapped to local ports.
+
+## Why Choose TunnelProxy?
+
+- ✅ **Simple and Easy to Use**: No complex configurations required, just a clean and intuitive interface to get you up and running quickly.
+- 🔒 **Secure and Stable**: Uses SSH tunneling for secure and stable port forwarding.
+- ⚙️ **Real-Time Debugging**: With Chrome DevTools Inspector support, you can debug, inspect, and optimize remote services mapped to local ports, enhancing your development workflow.
+- ⏳ **Time-Saving**: No need for manual configuration of servers or networks. TunnelProxy provides an easy, quick, and secure solution to map remote services locally.
