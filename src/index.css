@@ -1,0 +1,127 @@
+@import 'antd/dist/reset.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 自定义表格样式 */
+.custom-table .ant-table-thead > tr > th {
+  background-color: #f8fafc;
+  font-weight: 600;
+}
+
+.custom-table .ant-table-tbody > tr:hover > td {
+  background-color: #f1f5f9 !important;
+}
+
+/* 自定义按钮样式 */
+.ant-btn-primary {
+  background-color: #3b82f6;
+}
+
+.ant-btn-primary:hover {
+  background-color: #2563eb !important;
+}
+
+/* 自定义标签样式 */
+.ant-tag {
+  border-radius: 9999px;
+  padding: 2px 12px;
+}
+
+/* 自定义卡片样式 */
+.ant-card {
+  border-radius: 12px;
+}
+
+.ant-card-head {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* 自定义输入框样式 */
+.ant-input, .ant-input-number {
+  border-radius: 8px;
+}
+
+.ant-input:hover, .ant-input-number:hover {
+  border-color: #3b82f6;
+}
+
+.ant-input:focus, .ant-input-number:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* 自定义模态框样式 */
+.custom-modal .ant-modal-content {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.custom-modal .ant-modal-header {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* 语言选择器样式 */
+.language-select .ant-select-selector {
+  padding: 0 !important;
+  height: 28px !important;
+  line-height: 28px !important;
+}
+
+.language-select .ant-select-selection-item {
+  padding-right: 20px !important;
+  font-weight: 500;
+}
+
+/* 输入框前缀图标容器 */
+.ant-input-prefix {
+  margin-right: 0 !important;
+}
+
+/* 输入框悬停和聚焦效果 */
+.ant-input-affix-wrapper:hover {
+  border-color: #3b82f6 !important;
+}
+
+.ant-input-affix-wrapper-focused,
+.ant-input-affix-wrapper:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* 标题渐变动画 */
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.bg-gradient-to-r {
+  background-size: 200% auto;
+  animation: gradient 4s ease infinite;
+}
+
+/* 卡片标题样式 */
+.ant-card-head-title {
+  padding: 16px 0 !important;
+}
+
+
+
+/* 输入框前缀图标容器样式 */
+.ant-input-prefix {
+  margin-right: 12px !important;
+} 
+
+.right-lang{
+    position: absolute;
+    right: 10px;
+    top:2px;
+}
