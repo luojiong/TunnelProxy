@@ -3,11 +3,20 @@
   "private": true,
   "version": "0.0.1",
   "main": "dist-electron/main.js",
+  "description": "A port forwarding tool built with Electron",
+  "author": {
+    "name": "Your Name",
+    "email": "your.email@example.com"
+  },
+  "license": "MIT",
   "scripts": {
     "dev": "vite --mode development",
-    "build": "vite build && electron-builder",
+    "build": "vite build",
     "preview": "vite preview",
-    "start": "electron-vite dev"
+    "start": "electron-vite dev",
+    "pack": "electron-builder --dir",
+    "dist": "vite build && electron-builder",
+    "build:win": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "electron-store": "^8.1.0",
@@ -31,5 +40,22 @@
     "vite": "^5.0.8",
     "vite-plugin-electron": "^0.15.5",
     "vite-plugin-electron-renderer": "^0.14.5"
+  },
+  "build": {
+    "appId": "com.electron.port-forwarder",
+    "productName": "Port Forwarder",
+    "directories": {
+      "buildResources": "build",
+      "output": "release/${version}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    }
   }
 }

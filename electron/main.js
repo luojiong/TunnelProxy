@@ -3,6 +3,12 @@ const path = require('path')
 const net = require('net')
 const Store = require('electron-store')
 
+// 设置应用程序名称
+app.setName('Port Forwarder')
+
+// 配置应用缓存路径
+app.setPath('userData', path.join(app.getPath('appData'), 'port-forwarder'))
+
 // 初始化 store
 const store = new Store({
   name: 'port-forwarding-rules',
@@ -21,11 +27,23 @@ const createWindow = () => {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // 添加缓存配置
+      partition: 'persist:main'
     },
     show: false,
     backgroundColor: '#fff',
   })
+
+  // 配置 session
+  const ses = mainWindow.webContents.session
+  ses.clearCache()
+    .then(() => {
+      console.log('清除缓存成功');
+    })
+    .catch(err => {
+      console.error('清除缓存失败:', err);
+    });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
@@ -45,10 +63,35 @@ const createWindow = () => {
   })
 }
 
-// 确保只创建一个窗口
+// 在应用准备好时进行清理
 app.whenReady().then(() => {
-  createWindow()
-})
+  // 清理旧的缓存
+  try {
+    const ses = require('electron').session;
+    ses.defaultSession.clearCache()
+      .then(() => {
+        console.log('清除默认会话缓存成功');
+      })
+      .catch(err => {
+        console.error('清除默认会话缓存失败:', err);
+      });
+  } catch (error) {
+    console.error('清理缓存出错:', error);
+  }
+
+  createWindow();
+  
+  const forwardings = store.get('forwardings');
+  forwardings.forEach(rule => {
+    if (rule.status === 'running') {
+      startForwarding({
+        remoteHost: rule.remoteHost,
+        remotePort: rule.remotePort,
+        localPort: rule.localPort
+      });
+    }
+  });
+});
 
 // 防止重复启动应用
 const gotTheLock = app.requestSingleInstanceLock()
@@ -74,6 +117,16 @@ app.on('activate', () => {
     createWindow()
   }
 })
+
+const safeReply = (event, channel, data) => {
+  try {
+    if (!event.sender.isDestroyed()) {
+      event.reply(channel, data);
+    }
+  } catch (error) {
+    console.error('回复消息失败:', error);
+  }
+};
 
 // 创建一个辅助函数来启动转发
 const startForwarding = (params, event = null) => {
@@ -135,7 +188,7 @@ const startForwarding = (params, event = null) => {
       console.error('远程连接错误:', err);
       cleanup();
       if (event) {
-        event.reply('forwarding-status', {
+        safeReply(event, 'forwarding-status', {
           id: id,
           status: 'error',
           error: `连接错误: ${err.message} (${err.code})`
@@ -162,7 +215,7 @@ const startForwarding = (params, event = null) => {
   server.on('error', (err) => {
     console.error('服务器错误:', err);
     if (event) {
-      event.reply('forwarding-status', {
+      safeReply(event, 'forwarding-status', {
         id,
         status: 'error',
         error: err.message
@@ -187,11 +240,11 @@ const startForwarding = (params, event = null) => {
       store.set('forwardings', updatedForwardings);
       
       if (event) {
-        event.reply('forwarding-status', {
+        safeReply(event, 'forwarding-status', {
           id,
           status: 'running'
         });
-        event.reply('forwarding-rules-updated', updatedForwardings);
+        safeReply(event, 'forwarding-rules-updated', updatedForwardings);
       }
     });
 
@@ -206,68 +259,91 @@ const startForwarding = (params, event = null) => {
     store.set('forwardings', updatedForwardings);
     
     if (event) {
-      event.reply('forwarding-status', {
+      safeReply(event, 'forwarding-status', {
         id,
         status: 'error',
         error: err.message
       });
-      event.reply('forwarding-rules-updated', updatedForwardings);
+      safeReply(event, 'forwarding-rules-updated', updatedForwardings);
     }
   }
 };
 
 // 修改 start-forwarding 事件处理
 ipcMain.on('start-forwarding', (event, params) => {
-  startForwarding(params, event);
+  try {
+    startForwarding(params, event);
+  } catch (error) {
+    console.error('启动转发失败:', error);
+    event.reply('forwarding-status', {
+      id: `${params.remoteHost}:${params.remotePort}->${params.localPort}`,
+      status: 'error',
+      error: error.message
+    });
+  }
 });
 
 // 停止转发
 ipcMain.on('stop-forwarding', (event, id) => {
-  const server = forwardingServers.get(id);
-  if (server) {
-    try {
-      // 关闭所有现有连接
-      server.clients?.forEach(client => {
-        try {
-          client.destroy();
-        } catch (err) {
-          console.error('关闭客户端连接失败:', err);
-        }
-      });
+  try {
+    const server = forwardingServers.get(id);
+    if (server) {
+      try {
+        // 关闭所有现有连接
+        server.clients?.forEach(client => {
+          try {
+            client.destroy();
+          } catch (err) {
+            console.error('关闭客户端连接失败:', err);
+          }
+        });
 
-      // 强制关闭服务器
-      server.close();
-      server.unref();
+        // 强制关闭服务器
+        server.close();
+        server.unref();
 
-      const forwardings = store.get('forwardings');
-      const updatedForwardings = forwardings.map(f => 
-        f.id === id ? { ...f, status: 'stopped', error: null } : f
-      );
-      store.set('forwardings', updatedForwardings);
+        const forwardings = store.get('forwardings');
+        const updatedForwardings = forwardings.map(f => 
+          f.id === id ? { ...f, status: 'stopped', error: null } : f
+        );
+        store.set('forwardings', updatedForwardings);
 
-      console.log(`停止转发: ${id}`);
-      event.reply('forwarding-status', {
-        id: id,
-        status: 'stopped'
-      });
-      event.reply('forwarding-rules-updated', updatedForwardings);
+        console.log(`停止转发: ${id}`);
+        event.reply('forwarding-status', {
+          id: id,
+          status: 'stopped'
+        });
+        event.reply('forwarding-rules-updated', updatedForwardings);
 
-      // 从 Map 中移除服务器引用
-      forwardingServers.delete(id);
-    } catch (err) {
-      console.error('停止服务器时出错:', err);
-      event.reply('forwarding-status', {
-        id: id,
-        status: 'error',
-        error: `停���失败: ${err.message}`
-      });
+        // 从 Map 中移除服务器引用
+        forwardingServers.delete(id);
+      } catch (err) {
+        console.error('停止服务器时出错:', err);
+        event.reply('forwarding-status', {
+          id: id,
+          status: 'error',
+          error: `停止失败: ${err.message}`
+        });
+      }
     }
+  } catch (error) {
+    console.error('停止转发失败:', error);
+    event.reply('forwarding-status', {
+      id,
+      status: 'error',
+      error: error.message
+    });
   }
 });
 
 // 获取所有规则
 ipcMain.handle('get-forwarding-rules', () => {
-  return store.get('forwardings');
+  try {
+    return store.get('forwardings') || [];
+  } catch (error) {
+    console.error('获取规则失败:', error);
+    return [];
+  }
 });
 
 // 删除规则
@@ -303,18 +379,28 @@ ipcMain.on('edit-forwarding', (event, { oldId, newRule }) => {
   event.reply('forwarding-rules-updated', updatedForwardings);
 });
 
-// 修改应用启动时的自动启动逻辑
-app.whenReady().then(() => {
-  createWindow();
-  
-  const forwardings = store.get('forwardings');
-  forwardings.forEach(rule => {
-    if (rule.status === 'running') {
-      startForwarding({
-        remoteHost: rule.remoteHost,
-        remotePort: rule.remotePort,
-        localPort: rule.localPort
-      });
+// 添加错误处理
+app.on('render-process-gone', (event, webContents, details) => {
+  console.error('渲染进程崩溃:', details);
+});
+
+app.on('child-process-gone', (event, details) => {
+  console.error('子进程崩溃:', details);
+});
+
+// 在退出时进行清理
+app.on('before-quit', () => {
+  try {
+    // 关闭所有转发服务
+    for (const [id, server] of forwardingServers.entries()) {
+      try {
+        server.close();
+        forwardingServers.delete(id);
+      } catch (error) {
+        console.error(`关闭服务器失败 ${id}:`, error);
+      }
     }
-  });
+  } catch (error) {
+    console.error('退出清理失败:', error);
+  }
 });

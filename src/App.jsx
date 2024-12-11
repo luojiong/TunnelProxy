@@ -16,20 +16,48 @@ function App() {
 
   // 加载保存的规则
   useEffect(() => {
+    let mounted = true;
+
     const loadRules = async () => {
-      const savedRules = await window.electron.ipcRenderer.invoke('get-forwarding-rules');
-      setForwardings(savedRules);
+      try {
+        const savedRules = await window.electron.ipcRenderer.invoke('get-forwarding-rules');
+        if (mounted) {
+          setForwardings(savedRules || []);
+        }
+      } catch (error) {
+        console.error('加载规则失败:', error);
+      }
     };
+
     loadRules();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // 监听规则更新
   useEffect(() => {
-    const unsubscribe = window.electron.ipcRenderer.on('forwarding-rules-updated', (rules) => {
-      setForwardings(rules);
-    });
+    let isSubscribed = true;
 
-    return () => unsubscribe();
+    const handleRulesUpdate = (rules) => {
+      if (isSubscribed) {
+        setForwardings(rules || []);
+      }
+    };
+
+    const unsubscribe = window.electron.ipcRenderer.on('forwarding-rules-updated', handleRulesUpdate);
+
+    return () => {
+      isSubscribed = false;
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error('清理监听器失败:', error);
+        }
+      }
+    };
   }, []);
 
   const formatHost = (host) => {
@@ -37,46 +65,73 @@ function App() {
   };
 
   const handleSubmit = (values) => {
-    const { remoteHost, remotePort, localPort } = values;
-    const formattedHost = formatHost(remoteHost);
-    const newForwarding = {
-      id: `${formattedHost}:${remotePort}->${localPort}`,
-      remoteHost: formattedHost,
-      remotePort,
-      localPort,
-      status: 'running'
-    };
+    try {
+      const { remoteHost, remotePort, localPort } = values;
+      const formattedHost = formatHost(remoteHost);
+      const newForwarding = {
+        id: `${formattedHost}:${remotePort}->${localPort}`,
+        remoteHost: formattedHost,
+        remotePort,
+        localPort,
+        status: 'running'
+      };
 
-    ipcRenderer.send('start-forwarding', {
-      remoteHost: formattedHost,
-      remotePort,
-      localPort
-    });
+      window.electron.ipcRenderer.send('start-forwarding', {
+        remoteHost: formattedHost,
+        remotePort,
+        localPort
+      });
 
-    setForwardings([...forwardings, newForwarding]);
-    form.resetFields();
-    message.success(t('Add success'));
+      form.resetFields();
+      message.success(t('Add success'));
+    } catch (error) {
+      console.error('提交失败:', error);
+      message.error(t('Add failed'));
+    }
   };
 
   const handleStop = (id) => {
-    ipcRenderer.send('stop-forwarding', id);
-    message.info(t('Stop success'));
+    try {
+      window.electron.ipcRenderer.send('stop-forwarding', id);
+      message.info(t('Stop success'));
+    } catch (error) {
+      console.error('停止失败:', error);
+      message.error(t('Stop failed'));
+    }
   };
 
   const handleDelete = (id) => {
-    ipcRenderer.send('delete-forwarding', id);
-    message.success(t('Delete success'));
+    try {
+      window.electron.ipcRenderer.send('delete-forwarding', id);
+      message.success(t('Delete success'));
+    } catch (error) {
+      console.error('删除失败:', error);
+      message.error(t('Delete failed'));
+    }
   };
 
   useEffect(() => {
-    const unsubscribe = window.electron.ipcRenderer.on('forwarding-status', ({ id, status, error }) => {
-      setForwardings(prev => 
-        prev.map(f => f.id === id ? { ...f, status, error } : f)
-      );
-    });
+    let isSubscribed = true;
+
+    const handleStatusUpdate = ({ id, status, error }) => {
+      if (isSubscribed) {
+        setForwardings(prev => 
+          prev.map(f => f.id === id ? { ...f, status, error } : f)
+        );
+      }
+    };
+
+    const unsubscribe = window.electron.ipcRenderer.on('forwarding-status', handleStatusUpdate);
 
     return () => {
-      unsubscribe();
+      isSubscribed = false;
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error('清理监听器失败:', error);
+        }
+      }
     };
   }, []);
 
@@ -126,13 +181,18 @@ function App() {
   };
 
   const handleStart = (record) => {
-    const formattedHost = formatHost(record.remoteHost);
-    ipcRenderer.send('start-forwarding', {
-      remoteHost: formattedHost,
-      remotePort: record.remotePort,
-      localPort: record.localPort
-    });
-    message.success(t('Start success'));
+    try {
+      const formattedHost = formatHost(record.remoteHost);
+      window.electron.ipcRenderer.send('start-forwarding', {
+        remoteHost: formattedHost,
+        remotePort: record.remotePort,
+        localPort: record.localPort
+      });
+      message.success(t('Start success'));
+    } catch (error) {
+      console.error('启动失败:', error);
+      message.error(t('Start failed'));
+    }
   };
 
   const handleLanguageChange = (value) => {

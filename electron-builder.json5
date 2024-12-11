@@ -1,6 +1,8 @@
 {
   "appId": "com.electron.port-forwarder",
   "productName": "Port Forwarder",
+  "copyright": "Copyright © 2024 ${author}",
+  "asar": true,
   "directories": {
     "output": "release/${version}"
   },
@@ -9,15 +11,28 @@
     "dist"
   ],
   "mac": {
+    "artifactName": "${productName}_${version}.${ext}",
     "target": ["dmg"]
   },
   "win": {
-    "target": ["nsis"]
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "artifactName": "${productName}_${version}.${ext}",
+    "icon": "build/icon.ico",
+    "requestedExecutionLevel": "requireAdministrator"
   },
   "nsis": {
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
-  }
+    "deleteAppDataOnUninstall": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Port Forwarder"
+  },
+  "publish": null
 } 
