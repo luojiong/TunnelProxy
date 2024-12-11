@@ -31,3 +31,7 @@ TunnelProxy simplifies the process of accessing remote services by mapping remot
 - 🔒 **Secure and Stable**: Uses SSH tunneling for secure and stable port forwarding.
 - ⚙️ **Real-Time Debugging**: With Chrome DevTools Inspector support, you can debug, inspect, and optimize remote services mapped to local ports, enhancing your development workflow.
 - ⏳ **Time-Saving**: No need for manual configuration of servers or networks. TunnelProxy provides an easy, quick, and secure solution to map remote services locally.
+
+## Preview
+
+<image src="./preview.png" alt="preview" />
