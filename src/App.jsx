@@ -431,7 +431,7 @@ function App() {
                 </Form.Item>
               </div>
 
-              <div className="w-32">
+              <div className="w-100">
                 <Form.Item
                   name="remotePort"
                   label={t('Remote Port')}
@@ -451,7 +451,7 @@ function App() {
                 </Form.Item>
               </div>
 
-              <div className="w-32">
+              <div className="w-100">
                 <Form.Item
                   name="localPort"
                   label={t('Local Port')}

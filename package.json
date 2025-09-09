@@ -1,7 +1,7 @@
 {
   "name": "electron-port-forwarder",
   "private": true,
-  "version": "0.0.1",
+  "version": "1.0.2",
   "main": "dist-electron/main.js",
   "description": "A port forwarding tool built with Electron",
   "author": {
