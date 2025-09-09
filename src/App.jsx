@@ -13,6 +13,7 @@ function App() {
   const [editingRule, setEditingRule] = useState(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editForm] = Form.useForm();
+  const [mode, setMode] = useState('forward');
 
   // 加载保存的规则
   useEffect(() => {
@@ -66,21 +67,30 @@ function App() {
 
   const handleSubmit = (values) => {
     try {
-      const { remoteHost, remotePort, localPort } = values;
-      const formattedHost = formatHost(remoteHost);
-      const newForwarding = {
-        id: `${formattedHost}:${remotePort}->${localPort}`,
-        remoteHost: formattedHost,
-        remotePort,
-        localPort,
-        status: 'running'
-      };
-
-      window.electron.ipcRenderer.send('start-forwarding', {
-        remoteHost: formattedHost,
-        remotePort,
-        localPort
-      });
+      if (mode === 'reverse-ssh') {
+        const { remoteHost, sshUser, sshPassword, sshPort, remotePort, localPort } = values;
+        const sshHost = formatHost(remoteHost);
+        const id = `${sshHost}:${remotePort}<-${localPort}`;
+        window.electron.ipcRenderer.send('start-reverse-ssh', {
+          sshHost,
+          sshPort: sshPort || 22,
+          sshUser,
+          sshPassword,
+          authType: 'password',
+          remoteBindHost: '127.0.0.1',
+          remotePort,
+          localPort,
+          id
+        });
+      } else {
+        const { remoteHost, remotePort, localPort } = values;
+        const formattedHost = formatHost(remoteHost);
+        window.electron.ipcRenderer.send('start-forwarding', {
+          remoteHost: formattedHost,
+          remotePort,
+          localPort
+        });
+      }
 
       form.resetFields();
       message.success(t('Add success'));
@@ -92,7 +102,12 @@ function App() {
 
   const handleStop = (id) => {
     try {
-      window.electron.ipcRenderer.send('stop-forwarding', id);
+      const rule = forwardings.find(f => f.id === id);
+      if (rule?.type === 'reverse-ssh') {
+        window.electron.ipcRenderer.send('stop-reverse-ssh', id);
+      } else {
+        window.electron.ipcRenderer.send('stop-forwarding', id);
+      }
       message.info(t('Stop success'));
     } catch (error) {
       console.error('停止失败:', error);
@@ -138,7 +153,7 @@ function App() {
   const handleEdit = (record) => {
     setEditingRule(record);
     editForm.setFieldsValue({
-      remoteHost: record.remoteHost,
+      remoteHost: record.type === 'reverse-ssh' ? record.sshHost : record.remoteHost,
       remotePort: record.remotePort,
       localPort: record.localPort,
     });
@@ -146,14 +161,40 @@ function App() {
   };
 
   const handleEditSubmit = async (values) => {
-    const { remoteHost, remotePort, localPort } = values;
-    const formattedHost = formatHost(remoteHost);
-    const newId = `${formattedHost}:${remotePort}->${localPort}`;
+    let newRule = null;
+    let newId = null;
+    if (editingRule.type === 'reverse-ssh') {
+      const { remoteHost, remotePort, localPort } = values;
+      const sshHost = formatHost(remoteHost);
+      newId = `${sshHost}:${remotePort}<-${localPort}`;
+      newRule = {
+        id: newId,
+        type: 'reverse-ssh',
+        sshHost,
+        sshPort: editingRule.sshPort || 22,
+        sshUser: editingRule.sshUser,
+        sshPassword: editingRule.sshPassword,
+        authType: editingRule.authType || 'password',
+        remoteBindHost: editingRule.remoteBindHost || '127.0.0.1',
+        remotePort,
+        localPort,
+        status: 'stopped'
+      };
+    } else {
+      const { remoteHost, remotePort, localPort } = values;
+      const formattedHost = formatHost(remoteHost);
+      newId = `${formattedHost}:${remotePort}->${localPort}`;
+      newRule = {
+        id: newId,
+        remoteHost: formattedHost,
+        remotePort,
+        localPort,
+        status: 'stopped'
+      };
+    }
     
     // 检查新ID是否与其他规则冲突（除了当前编辑的规则）
-    const isDuplicate = forwardings.some(f => 
-      f.id === newId && f.id !== editingRule.id
-    );
+    const isDuplicate = forwardings.some(f => f.id === newId && f.id !== editingRule.id);
 
     if (isDuplicate) {
       message.error(t('Rule already exists'));
@@ -162,19 +203,14 @@ function App() {
 
     // 如果规则正在运行，需要先停止
     if (editingRule.status === 'running') {
-      ipcRenderer.send('stop-forwarding', editingRule.id);
+      if (editingRule.type === 'reverse-ssh') {
+        ipcRenderer.send('stop-reverse-ssh', editingRule.id);
+      } else {
+        ipcRenderer.send('stop-forwarding', editingRule.id);
+      }
     }
 
-    ipcRenderer.send('edit-forwarding', {
-      oldId: editingRule.id,
-      newRule: {
-        id: newId,
-        remoteHost: formattedHost,
-        remotePort,
-        localPort,
-        status: 'stopped'
-      }
-    });
+    ipcRenderer.send('edit-forwarding', { oldId: editingRule.id, newRule });
 
     setEditModalVisible(false);
     message.success(t('Edit success'));
@@ -182,12 +218,27 @@ function App() {
 
   const handleStart = (record) => {
     try {
-      const formattedHost = formatHost(record.remoteHost);
-      window.electron.ipcRenderer.send('start-forwarding', {
-        remoteHost: formattedHost,
-        remotePort: record.remotePort,
-        localPort: record.localPort
-      });
+      if (record.type === 'reverse-ssh') {
+        window.electron.ipcRenderer.send('start-reverse-ssh', {
+          sshHost: record.sshHost,
+          sshPort: record.sshPort || 22,
+          sshUser: record.sshUser,
+          sshPassword: record.sshPassword,
+          authType: record.authType || 'password',
+          keyPath: record.keyPath,
+          remoteBindHost: record.remoteBindHost || '127.0.0.1',
+          remotePort: record.remotePort,
+          localPort: record.localPort,
+          id: record.id
+        });
+      } else {
+        const formattedHost = formatHost(record.remoteHost);
+        window.electron.ipcRenderer.send('start-forwarding', {
+          remoteHost: formattedHost,
+          remotePort: record.remotePort,
+          localPort: record.localPort
+        });
+      }
       message.success(t('Start success'));
     } catch (error) {
       console.error('启动失败:', error);
@@ -205,6 +256,7 @@ function App() {
       title: t('Remote Host'),
       dataIndex: 'remoteHost',
       key: 'remoteHost',
+      render: (_, r) => r.type === 'reverse-ssh' ? `${r.sshUser}@${r.sshHost}` : r.remoteHost,
     },
     {
       title: t('Remote Port'),
@@ -333,84 +385,161 @@ function App() {
           <Form
             form={form}
             onFinish={handleSubmit}
-            className="flex  gap-4"
+            layout="vertical"
+            className="space-y-6"
           >
-            <div className="flex-1">
-              <Form.Item
-                name="remoteHost"
-                rules={[
-                  { required: true, message: t('Please input remote host') },
-                  {
-                    validator: (_, value) => {
-                      if (value && value.includes('://')) {
-                        return Promise.reject(t('Do not enter http:// or https:// prefix'));
+            {/* 第一行：模式选择 */}
+            <div className="flex gap-4 items-end">
+              <div className="w-60">
+                <Form.Item name="type" label={t('Mode')} className="mb-0" initialValue={mode}>
+                  <Select value={mode} onChange={(v) => setMode(v)} className="h-11">
+                    <Option value="forward">{t('Forward')}</Option>
+                    <Option value="reverse-ssh">{t('Reverse SSH')}</Option>
+                  </Select>
+                </Form.Item>
+              </div>
+            </div>
+
+            {/* 第二行：主要配置 */}
+            <div className="flex gap-4 items-end">
+              <div className="flex-1">
+                <Form.Item
+                  name="remoteHost"
+                  label={mode === 'reverse-ssh' ? t('SSH Host') : t('Remote Host')}
+                  rules={[
+                    { required: true, message: mode === 'reverse-ssh' ? t('Please input ssh host') : t('Please input remote host') },
+                    {
+                      validator: (_, value) => {
+                        if (value && value.includes('://')) {
+                          return Promise.reject(t('Do not enter http:// or https:// prefix'));
+                        }
+                        return Promise.resolve();
                       }
-                      return Promise.resolve();
                     }
-                  }
-                ]}
-                className="mb-0"
-              >
-                <Input 
-                  placeholder={t('Remote Host')} 
-                  className="rounded-lg h-11"
-                  prefix={
-                    <div className="bg-blue-50 px-2 py-1 rounded-md mr-3">
-                      <LinkOutlined className="text-blue-500" />
-                    </div>
-                  }
-                />
+                  ]}
+                  className="mb-0"
+                >
+                  <Input 
+                    placeholder={mode === 'reverse-ssh' ? t('SSH Host example') : t('Remote Host')} 
+                    className="rounded-lg h-11"
+                    prefix={
+                      <div className="bg-blue-50 px-2 py-1 rounded-md mr-3">
+                        <LinkOutlined className="text-blue-500" />
+                      </div>
+                    }
+                  />
+                </Form.Item>
+              </div>
+
+              <div className="w-32">
+                <Form.Item
+                  name="remotePort"
+                  label={t('Remote Port')}
+                  rules={[{ required: true, message: t('Please input remote port') }]}
+                  className="mb-0"
+                >
+                  <Input 
+                    type="number" 
+                    placeholder={t('Remote Port')} 
+                    className="rounded-lg h-11"
+                    prefix={
+                      <div className="bg-purple-50 px-2 py-1 rounded-md mr-3">
+                        <span className="text-purple-500 font-medium">:</span>
+                      </div>
+                    }
+                  />
+                </Form.Item>
+              </div>
+
+              <div className="w-32">
+                <Form.Item
+                  name="localPort"
+                  label={t('Local Port')}
+                  rules={[{ required: true, message: t('Please input local port') }]}
+                  className="mb-0"
+                >
+                  <Input 
+                    type="number" 
+                    placeholder={t('Local Port')} 
+                    className="rounded-lg h-11"
+                    prefix={
+                      <div className="bg-green-50 px-2 py-1 rounded-md mr-3">
+                        <span className="text-green-500 font-medium">→</span>
+                      </div>
+                    }
+                  />
+                </Form.Item>
+              </div>
+
+              <Form.Item className="mb-0">
+                <Button 
+                  type="primary" 
+                  htmlType="submit" 
+                  icon={<PlayCircleOutlined />}
+                  className="h-11 px-8 text-base font-medium hover:scale-105 transform transition-transform"
+                >
+                  {t('Add Forward')}
+                </Button>
               </Form.Item>
             </div>
 
-            <div className="w-120">
-              <Form.Item
-                name="remotePort"
-                rules={[{ required: true, message: t('Please input remote port') }]}
-                className="mb-0"
-              >
-                <Input 
-                  type="number" 
-                  placeholder={t('Remote Port')} 
-                  className="rounded-lg h-11"
-                  prefix={
-                    <div className="bg-purple-50 px-2 py-1 rounded-md mr-3">
-                      <span className="text-purple-500 font-medium">:</span>
-                    </div>
-                  }
-                />
-              </Form.Item>
-            </div>
+            {/* 第三行：反向SSH认证信息 */}
+            {mode === 'reverse-ssh' && (
+              <div className="flex gap-4 items-end pt-4 border-t border-gray-200">
+                <div className="flex-1">
+                  <Form.Item
+                    name="sshUser"
+                    label={t('SSH User')}
+                    rules={[{ required: true, message: t('Please input ssh user') }]}
+                    className="mb-0"
+                  >
+                    <Input 
+                      placeholder={t('SSH User')} 
+                      className="rounded-lg h-11"
+                      prefix={
+                        <div className="bg-orange-50 px-2 py-1 rounded-md mr-3">
+                          <span className="text-orange-500 font-medium">@</span>
+                        </div>
+                      }
+                    />
+                  </Form.Item>
+                </div>
 
-            <div className="w-120">
-              <Form.Item
-                name="localPort"
-                rules={[{ required: true, message: t('Please input local port') }]}
-                className="mb-0"
-              >
-                <Input 
-                  type="number" 
-                  placeholder={t('Local Port')} 
-                  className="rounded-lg h-11"
-                  prefix={
-                    <div className="bg-green-50 px-2 py-1 rounded-md mr-3">
-                      <span className="text-green-500 font-medium">→</span>
-                    </div>
-                  }
-                />
-              </Form.Item>
-            </div>
+                <div className="flex-1">
+                  <Form.Item
+                    name="sshPassword"
+                    label={t('SSH Password')}
+                    rules={[{ required: true, message: t('Please input ssh password') }]}
+                    className="mb-0"
+                  >
+                    <Input.Password 
+                      placeholder={t('SSH Password')} 
+                      className="rounded-lg h-11"
+                      prefix={
+                        <div className="bg-red-50 px-2 py-1 rounded-md mr-3">
+                          <span className="text-red-500 font-medium">🔑</span>
+                        </div>
+                      }
+                    />
+                  </Form.Item>
+                </div>
 
-            <Form.Item className="mb-0 w-40">
-              <Button 
-                type="primary" 
-                htmlType="submit" 
-                icon={<PlayCircleOutlined />}
-                className="w-full rounded-lg h-11 text-base font-medium hover:scale-105 transform transition-transform"
-              >
-                {t('Add Forward')}
-              </Button>
-            </Form.Item>
+                <div className="w-32">
+                  <Form.Item
+                    name="sshPort"
+                    label={t('SSH Port')}
+                    initialValue={22}
+                    className="mb-0"
+                  >
+                    <Input 
+                      type="number" 
+                      placeholder="22" 
+                      className="rounded-lg h-11"
+                    />
+                  </Form.Item>
+                </div>
+              </div>
+            )}
           </Form>
         </Card>
 

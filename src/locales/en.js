@@ -3,6 +3,7 @@ export default {
     "Port Forwarder": "Port Forwarder",
     "Add Rule": "Add Rule",
     "Remote Host": "Remote Host",
+    "Remote Host user@host example": "Remote Host (Reverse SSH: user@host, e.g. root@1.2.3.4)",
     "Remote Port": "Remote Port",
     "Local Port": "Local Port",
     "Add Forward": "Add Forward",
@@ -32,6 +33,22 @@ export default {
     "Example": "Example",
     "Connection error": "Connection error",
     "Stop error": "Stop error",
-    "Rule already exists": "This forwarding rule already exists!"
+    "Rule already exists": "This forwarding rule already exists!",
+    "Type": "Type",
+    "Forward": "Forward",
+    "Reverse SSH": "Reverse SSH",
+    "Please input ssh host": "Please input SSH host",
+    "Please input ssh user": "Please input SSH user",
+    "Mode": "Mode",
+    "SSH Host": "SSH Host",
+    "SSH Host example": "e.g. 192.168.1.100",
+    "SSH Port": "SSH Port",
+    "SSH User": "SSH User",
+    "SSH Password": "SSH Password",
+    "Please input ssh password": "Please input SSH password",
+    "Key": "Key",
+    "Agent": "Agent",
+    "Private Key Path (optional)": "Private Key Path (optional)",
+    "Remote Bind Host": "Remote Bind Host"
   }
 } 

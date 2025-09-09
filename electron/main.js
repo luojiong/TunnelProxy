@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 const net = require('net')
+const { spawn } = require('child_process')
+const fs = require('fs')
+const { Client } = require('ssh2')
 const Store = require('electron-store')
 
 // 设置应用程序名称
@@ -19,6 +22,8 @@ const store = new Store({
 
 let mainWindow
 const forwardingServers = new Map()
+const reverseSshProcesses = new Map()
+const sshClients = new Map()
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -84,11 +89,27 @@ app.whenReady().then(() => {
   const forwardings = store.get('forwardings');
   forwardings.forEach(rule => {
     if (rule.status === 'running') {
-      startForwarding({
-        remoteHost: rule.remoteHost,
-        remotePort: rule.remotePort,
-        localPort: rule.localPort
-      });
+      const type = rule.type || 'forward'
+      if (type === 'reverse-ssh') {
+        startReverseSSH({
+          sshHost: rule.sshHost,
+          sshPort: rule.sshPort,
+          sshUser: rule.sshUser,
+          sshPassword: rule.sshPassword,
+          authType: rule.authType,
+          keyPath: rule.keyPath,
+          remoteBindHost: rule.remoteBindHost,
+          remotePort: rule.remotePort,
+          localPort: rule.localPort,
+          id: rule.id
+        })
+      } else {
+        startForwarding({
+          remoteHost: rule.remoteHost,
+          remotePort: rule.remotePort,
+          localPort: rule.localPort
+        });
+      }
     }
   });
 });
@@ -144,6 +165,7 @@ const startForwarding = (params, event = null) => {
       remotePort,
       localPort,
       status: 'stopped',
+      type: 'forward',
       createdAt: new Date().toISOString()
     };
     store.set('forwardings', [...forwardings, newForwarding]);
@@ -269,6 +291,148 @@ const startForwarding = (params, event = null) => {
   }
 };
 
+// 基于 ssh2 库的反向端口转发，支持密码认证
+const startReverseSSH = (params, event = null) => {
+  const {
+    sshHost,
+    sshPort = 22,
+    sshUser,
+    sshPassword,
+    authType = 'password',
+    keyPath,
+    remoteBindHost = '127.0.0.1',
+    remotePort,
+    localPort,
+    id: customId
+  } = params
+
+  const id = customId || `${sshHost}:${remotePort}<-${localPort}`
+
+  // 持久化规则
+  const forwardings = store.get('forwardings');
+  const existingRule = forwardings.find(f => f.id === id);
+  if (!existingRule) {
+    const newRule = {
+      id,
+      type: 'reverse-ssh',
+      sshHost,
+      sshPort,
+      sshUser,
+      sshPassword,
+      authType,
+      keyPath: keyPath || null,
+      remoteBindHost,
+      remotePort,
+      localPort,
+      status: 'stopped',
+      createdAt: new Date().toISOString()
+    }
+    store.set('forwardings', [...forwardings, newRule])
+  }
+
+  if (sshClients.has(id)) {
+    console.log(`反向 SSH 已在运行: ${id}`)
+    return
+  }
+
+  const updateStatus = (status, error) => {
+    const current = store.get('forwardings')
+    const updated = current.map(f => f.id === id ? { ...f, status, error: error || null } : f)
+    store.set('forwardings', updated)
+    if (event) {
+      safeReply(event, 'forwarding-status', { id, status, error })
+      safeReply(event, 'forwarding-rules-updated', updated)
+    }
+  }
+
+  const conn = new Client()
+  sshClients.set(id, conn)
+
+  console.log(`启动反向 SSH: ${sshUser}@${sshHost}:${sshPort} -> ${remoteBindHost}:${remotePort}<-127.0.0.1:${localPort}`)
+
+  conn.on('ready', () => {
+    console.log(`SSH 连接已建立: ${id}`)
+    
+    // 建立反向端口转发
+    conn.forwardIn(remoteBindHost, remotePort, (err) => {
+      if (err) {
+        console.error(`反向转发失败: ${err.message}`)
+        updateStatus('error', `端口转发失败: ${err.message}`)
+        conn.end()
+        return
+      }
+      
+      console.log(`反向转发已建立: ${remoteBindHost}:${remotePort} -> 127.0.0.1:${localPort}`)
+      updateStatus('running')
+    })
+  })
+
+  conn.on('tcp connection', (info, accept, reject) => {
+    console.log(`收到反向连接请求: ${info.srcIP}:${info.srcPort}`)
+    
+    const stream = accept()
+    const localConn = net.createConnection({
+      host: '127.0.0.1',
+      port: localPort
+    })
+
+    stream.on('close', () => {
+      localConn.end()
+    })
+
+    localConn.on('close', () => {
+      stream.end()
+    })
+
+    stream.on('error', (err) => {
+      console.error(`反向流错误: ${err.message}`)
+      localConn.end()
+    })
+
+    localConn.on('error', (err) => {
+      console.error(`本地连接错误: ${err.message}`)
+      stream.end()
+    })
+
+    // 双向数据转发
+    stream.pipe(localConn)
+    localConn.pipe(stream)
+  })
+
+  conn.on('error', (err) => {
+    console.error(`SSH 连接错误: ${err.message}`)
+    updateStatus('error', `连接失败: ${err.message}`)
+    sshClients.delete(id)
+  })
+
+  conn.on('end', () => {
+    console.log(`SSH 连接已断开: ${id}`)
+    updateStatus('stopped')
+    sshClients.delete(id)
+  })
+
+  // 连接配置
+  const connConfig = {
+    host: sshHost,
+    port: sshPort,
+    username: sshUser,
+    keepaliveInterval: 60000,
+    keepaliveCountMax: 3,
+  }
+
+  if (authType === 'password' && sshPassword) {
+    connConfig.password = sshPassword
+  } else if (authType === 'key' && keyPath && fs.existsSync(keyPath)) {
+    connConfig.privateKey = fs.readFileSync(keyPath)
+  } else {
+    updateStatus('error', '缺少认证信息：请提供密码或密钥文件')
+    return
+  }
+
+  // 建立连接
+  conn.connect(connConfig)
+}
+
 // 修改 start-forwarding 事件处理
 ipcMain.on('start-forwarding', (event, params) => {
   try {
@@ -282,6 +446,20 @@ ipcMain.on('start-forwarding', (event, params) => {
     });
   }
 });
+
+// 启动反向 SSH
+ipcMain.on('start-reverse-ssh', (event, params) => {
+  try {
+    startReverseSSH(params, event)
+  } catch (error) {
+    console.error('启动反向 SSH 失败:', error)
+    event.reply('forwarding-status', {
+      id: params.id || `${params.sshHost}:${params.remotePort}<-${params.localPort}`,
+      status: 'error',
+      error: error.message
+    })
+  }
+})
 
 // 停止转发
 ipcMain.on('stop-forwarding', (event, id) => {
@@ -336,6 +514,32 @@ ipcMain.on('stop-forwarding', (event, id) => {
   }
 });
 
+// 停止反向 SSH
+ipcMain.on('stop-reverse-ssh', (event, id) => {
+  try {
+    const client = sshClients.get(id)
+    if (client) {
+      try {
+        client.end()
+      } catch (e) {
+        console.error('关闭 SSH 连接失败:', e)
+      }
+      sshClients.delete(id)
+
+      const forwardings = store.get('forwardings');
+      const updated = forwardings.map(f => 
+        f.id === id ? { ...f, status: 'stopped', error: null } : f
+      );
+      store.set('forwardings', updated);
+      event.reply('forwarding-status', { id, status: 'stopped' })
+      event.reply('forwarding-rules-updated', updated)
+    }
+  } catch (error) {
+    console.error('停止反向 SSH 失败:', error)
+    event.reply('forwarding-status', { id, status: 'error', error: error.message })
+  }
+})
+
 // 获取所有规则
 ipcMain.handle('get-forwarding-rules', () => {
   try {
@@ -357,6 +561,11 @@ ipcMain.on('delete-forwarding', (event, id) => {
     server.close();
     forwardingServers.delete(id);
   }
+  const client = sshClients.get(id)
+  if (client) {
+    try { client.end() } catch (e) {}
+    sshClients.delete(id)
+  }
   
   event.reply('forwarding-rules-updated', updatedForwardings);
 });
@@ -374,6 +583,11 @@ ipcMain.on('edit-forwarding', (event, { oldId, newRule }) => {
   if (server) {
     server.close();
     forwardingServers.delete(oldId);
+  }
+  const client = sshClients.get(oldId)
+  if (client) {
+    try { client.end() } catch (e) {}
+    sshClients.delete(oldId)
   }
   
   event.reply('forwarding-rules-updated', updatedForwardings);
@@ -398,6 +612,14 @@ app.on('before-quit', () => {
         forwardingServers.delete(id);
       } catch (error) {
         console.error(`关闭服务器失败 ${id}:`, error);
+      }
+    }
+    for (const [id, client] of sshClients.entries()) {
+      try {
+        client.end()
+        sshClients.delete(id)
+      } catch (error) {
+        console.error(`关闭 SSH 连接失败 ${id}:`, error)
       }
     }
   } catch (error) {
