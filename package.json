@@ -77,6 +77,7 @@
     ],
     "win": {
       "icon": "build/icon.ico",
+      "artifactName": "${productName} Setup ${version}.${ext}",
       "target": [
         {
           "target": "nsis",
@@ -89,7 +90,7 @@
       "requestedExecutionLevel": "asInvoker"
     },
     "linux": {
-      "icon": "build/icon.png",
+      "icon": "src/assets/icons",
       "target": [
         {
           "target": "AppImage",

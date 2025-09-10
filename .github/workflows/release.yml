@@ -228,11 +228,14 @@ jobs:
             **构建时间**: ${{ github.event.head_commit.timestamp }}  
             **提交**: ${{ github.sha }}
           files: |
-            # 仅上传 Windows 安装器（避免 win-unpacked 内的重复 exe 如 pagent.exe/elevate.exe）
-            ./artifacts/windows-release/**/*Setup*.exe
+            # Windows 安装器（避免上传 win-unpacked 内的内容）
+            ./artifacts/windows-release/**/*.exe
+            !./artifacts/windows-release/**/win-*/**
             ./artifacts/windows-release/**/*.msi
+            # macOS
             ./artifacts/macos-release/**/*.dmg
             ./artifacts/macos-release/**/*.zip
+            # Linux
             ./artifacts/linux-release/**/*.AppImage
             ./artifacts/linux-release/**/*.deb
             ./artifacts/linux-release/**/*.rpm
