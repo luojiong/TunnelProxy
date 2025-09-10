@@ -13,6 +13,8 @@ jobs:
   # Windows 构建
   build-windows:
     runs-on: windows-latest
+    env:
+      ELECTRON_BUILDER_DISABLE_CODE_SIGN: 'true'
     
     steps:
       - name: Checkout code
@@ -29,11 +31,43 @@ jobs:
       - name: Install dependencies
         run: yarn install
 
-      - name: Build application
+      - name: Build application (Vite)
         run: yarn build
+
+      - name: Verify icon exists
+        run: |
+          if (-Not (Test-Path -Path "build/icon.ico")) { throw "build/icon.ico not found" }
+          $size = (Get-Item "build/icon.ico").length
+          if ($size -le 0) { throw "build/icon.ico is empty" }
 
       - name: Build Windows apps
         run: yarn electron-builder --win --x64 --arm64 --publish=never
+
+      - name: Show effective config
+        if: always()
+        run: |
+          Get-ChildItem -Recurse -Filter builder-effective-config.yaml | ForEach-Object { Write-Host "---- $($_.FullName) ----"; Get-Content $_.FullName }
+
+      - name: Post-build resource checks (icons)
+        shell: pwsh
+        run: |
+          $winUnpacked = Get-ChildItem -Recurse -Directory -Path "release" -Filter "win-unpacked" | Select-Object -First 1
+          if (-Not $winUnpacked) { throw "win-unpacked folder not found in release/" }
+
+          $res = Join-Path $winUnpacked.FullName "resources"
+          if (-Not (Test-Path $res)) { throw "resources folder not found: $res" }
+
+          $paths = @(
+            (Join-Path $res "icons/icon.ico"),
+            (Join-Path $res "icons/32x32.png"),
+            (Join-Path $res "icons/16x16.png"),
+            (Join-Path $res "16x16.png"),
+            (Join-Path $res "32x32.png")
+          )
+          foreach ($p in $paths) {
+            if (-Not (Test-Path $p)) { throw "Missing expected icon resource: $p" }
+            if ((Get-Item $p).length -le 0) { throw "Icon file is empty: $p" }
+          }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
