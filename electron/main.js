@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require('electron')
 const path = require('path')
 const net = require('net')
 const { spawn } = require('child_process')
@@ -21,14 +21,132 @@ const store = new Store({
 });
 
 let mainWindow
+let tray = null
 const forwardingServers = new Map()
 const reverseSshProcesses = new Map()
 const sshClients = new Map()
 
+// 创建系统托盘
+const createTray = () => {
+  // 获取托盘图标路径
+  const getTrayIconPath = () => {
+    if (process.platform === 'win32') {
+      return path.join(__dirname, '../resources/icons/32x32.png')
+    } else if (process.platform === 'darwin') {
+      return path.join(__dirname, '../resources/icons/16x16.png')
+    } else {
+      return path.join(__dirname, '../resources/icons/32x32.png')
+    }
+  }
+
+  const iconPath = getTrayIconPath()
+  
+  // 创建托盘图标
+  tray = new Tray(iconPath)
+  
+  // 设置托盘提示文本
+  tray.setToolTip('Port Forwarder - 端口转发工具')
+  
+  // 创建托盘右键菜单
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示主窗口',
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) {
+            mainWindow.restore()
+          }
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      }
+    },
+    {
+      label: '隐藏到托盘',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.hide()
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '转发规则管理',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '关于',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            alert('Port Forwarder v${require('../package.json').version}\\n\\n一个简单易用的端口转发工具\\n支持本地转发和SSH反向转发');
+          `)
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      }
+    },
+    {
+      label: '退出程序',
+      click: () => {
+        app.isQuiting = true
+        app.quit()
+      }
+    }
+  ])
+  
+  // 设置托盘菜单
+  tray.setContextMenu(contextMenu)
+  
+  // 双击托盘图标显示主窗口
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide()
+      } else {
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    }
+  })
+  
+  // 单击托盘图标（Windows 下）
+  tray.on('click', () => {
+    if (process.platform === 'win32') {
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          mainWindow.hide()
+        } else {
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      }
+    }
+  })
+}
+
 const createWindow = () => {
+  // 获取图标路径
+  const getIconPath = () => {
+    if (process.platform === 'win32') {
+      return path.join(__dirname, '../resources/icons/icon.ico')
+    } else if (process.platform === 'darwin') {
+      return path.join(__dirname, '../resources/icons/icon.icns')
+    } else {
+      return path.join(__dirname, '../resources/icons/512x512.png')
+    }
+  }
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: getIconPath(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: true,
@@ -38,6 +156,8 @@ const createWindow = () => {
     },
     show: false,
     backgroundColor: '#fff',
+    // 添加窗口标题
+    title: 'Port Forwarder',
   })
 
   // 配置 session
@@ -52,6 +172,25 @@ const createWindow = () => {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  // 拦截窗口关闭事件
+  mainWindow.on('close', (event) => {
+    if (!app.isQuiting) {
+      event.preventDefault()
+      mainWindow.hide()
+      
+      // 首次隐藏时显示提示（可选）
+      if (!mainWindow.hasShownTrayNotification) {
+        tray.displayBalloon({
+          iconType: 'info',
+          title: 'Port Forwarder',
+          content: '应用程序已最小化到系统托盘，点击托盘图标可以重新打开'
+        })
+        mainWindow.hasShownTrayNotification = true
+      }
+      return false
+    }
   })
 
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -84,6 +223,10 @@ app.whenReady().then(() => {
     console.error('清理缓存出错:', error);
   }
 
+  // 创建系统托盘
+  createTray();
+  
+  // 创建主窗口
   createWindow();
   
   const forwardings = store.get('forwardings');
@@ -128,9 +271,13 @@ if (!gotTheLock) {
 }
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
+  // 在 Windows 和 Linux 下，当所有窗口关闭时不退出应用
+  // 因为我们希望应用继续在托盘中运行
+  if (process.platform === 'darwin') {
+    // macOS 下的标准行为：关闭窗口但保持应用运行
+    return
   }
+  // Windows 和 Linux 下也不退出，让应用在托盘中继续运行
 })
 
 app.on('activate', () => {
@@ -603,8 +750,16 @@ app.on('child-process-gone', (event, details) => {
 });
 
 // 在退出时进行清理
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  app.isQuiting = true
+  
   try {
+    // 销毁托盘图标
+    if (tray) {
+      tray.destroy()
+      tray = null
+    }
+    
     // 关闭所有转发服务
     for (const [id, server] of forwardingServers.entries()) {
       try {

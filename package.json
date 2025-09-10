@@ -1,7 +1,7 @@
 {
   "name": "electron-port-forwarder",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "dist-electron/main.js",
   "description": "A port forwarding tool built with Electron",
   "author": {
@@ -53,7 +53,25 @@
       "buildResources": "build",
       "output": "release/${version}"
     },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "src/assets/icons",
+        "to": "icons",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "build",
+        "to": ".",
+        "filter": ["16x16.png", "32x32.png"]
+      }
+    ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -66,6 +84,7 @@
       "requestedExecutionLevel": "asInvoker"
     },
     "linux": {
+      "icon": "build/icon.png",
       "target": [
         {
           "target": "AppImage",
@@ -92,6 +111,7 @@
       "category": "Network"
     },
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
         {
           "target": "dmg",
