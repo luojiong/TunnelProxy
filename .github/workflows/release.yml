@@ -68,6 +68,11 @@ jobs:
         run: |
           Get-ChildItem -Recurse -Filter builder-effective-config.yaml | ForEach-Object { Write-Host "---- $($_.FullName) ----"; Get-Content $_.FullName }
 
+      - name: List release folder
+        shell: pwsh
+        run: |
+          Write-Host "Release folder structure:"; Get-ChildItem -Recurse -Force release | ForEach-Object { $_.FullName }
+
       - name: Post-build resource checks (icons)
         shell: pwsh
         run: |
@@ -87,11 +92,20 @@ jobs:
             if ((Get-Item $p).length -le 0) { throw "Icon file is empty: $p" }
           }
 
+      - name: Collect Windows installers
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts_win | Out-Null
+          $installers = Get-ChildItem -Recurse -Path release -File | Where-Object { ($_.Extension -ieq ".exe" -or $_.Extension -ieq ".msi") -and ($_.FullName -notmatch "win-.*unpacked") -and ($_.Name -inotmatch "^(elevate|pagent)\.exe$") }
+          if (-Not $installers -or $installers.Count -eq 0) { throw "No Windows installers found (searched for .exe/.msi outside win-unpacked)" }
+          foreach ($f in $installers) { Copy-Item $f.FullName artifacts_win -Force }
+          Write-Host "Collected installers:"; Get-ChildItem artifacts_win
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
-          path: release/
+          path: artifacts_win/
           retention-days: 7
 
   # Linux 构建
