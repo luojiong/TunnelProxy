@@ -80,9 +80,7 @@ jobs:
           $paths = @(
             (Join-Path $res "icons/icon.ico"),
             (Join-Path $res "icons/32x32.png"),
-            (Join-Path $res "icons/16x16.png"),
-            (Join-Path $res "16x16.png"),
-            (Join-Path $res "32x32.png")
+            (Join-Path $res "icons/16x16.png")
           )
           foreach ($p in $paths) {
             if (-Not (Test-Path $p)) { throw "Missing expected icon resource: $p" }
