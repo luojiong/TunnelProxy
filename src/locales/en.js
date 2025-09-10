@@ -1,6 +1,6 @@
 export default {
   translation: {
-    "Port Forwarder": "Port Forwarder",
+    "Tunnel Proxy": "Tunnel Proxy",
     "Add Rule": "Add Rule",
     "Remote Host": "Remote Host",
     "Remote Host user@host example": "Remote Host (Reverse SSH: user@host, e.g. root@1.2.3.4)",

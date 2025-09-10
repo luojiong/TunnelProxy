@@ -1,11 +1,11 @@
 {
-  "name": "electron-port-forwarder",
+  "name": "tunnel-proxy",
   "private": true,
   "version": "1.0.3",
   "main": "dist-electron/main.js",
   "description": "A port forwarding tool built with Electron",
   "author": {
-    "name": "Your Name",
+    "name": "Caine",
     "email": "your.email@example.com"
   },
   "license": "MIT",
@@ -48,7 +48,7 @@
   },
   "build": {
     "appId": "com.electron.port-forwarder",
-    "productName": "Port Forwarder",
+    "productName": "Tunnel Proxy",
     "directories": {
       "buildResources": "build",
       "output": "release/${version}"
@@ -62,12 +62,17 @@
       {
         "from": "src/assets/icons",
         "to": "icons",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "build",
         "to": ".",
-        "filter": ["16x16.png", "32x32.png"]
+        "filter": [
+          "16x16.png",
+          "32x32.png"
+        ]
       }
     ],
     "win": {

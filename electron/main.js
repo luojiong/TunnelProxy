@@ -6,8 +6,39 @@ const fs = require('fs')
 const { Client } = require('ssh2')
 const Store = require('electron-store')
 
+// 提前设置单实例锁，避免二次实例瞬退导致“自动退出”的错觉
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  try { app.quit() } catch (_) {}
+  try { process.exit(0) } catch (_) {}
+} else {
+  app.on('second-instance', () => {
+    try {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    } catch (e) {
+      console.error('激活已有实例失败:', e)
+    }
+  })
+}
+
+// 主进程增加基础错误日志，避免因未捕获异常直接退出
+process.on('uncaughtException', (error) => {
+  try {
+    console.error('主进程未捕获的异常:', error)
+  } catch (_) {}
+})
+process.on('unhandledRejection', (reason) => {
+  try {
+    console.error('主进程未处理的 Promise 拒绝:', reason)
+  } catch (_) {}
+})
+
 // 设置应用程序名称
-app.setName('Port Forwarder')
+app.setName('Tunnel Proxy')
 
 // 配置应用缓存路径
 app.setPath('userData', path.join(app.getPath('appData'), 'port-forwarder'))
@@ -26,26 +57,52 @@ const forwardingServers = new Map()
 const reverseSshProcesses = new Map()
 const sshClients = new Map()
 
+// 获取资源路径的统一函数
+const getResourcePath = (...pathSegments) => {
+  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+  
+  if (isDev) {
+    // 开发环境：从 src/assets 或 resources 目录获取
+    const devPath1 = path.join(__dirname, '../src/assets', ...pathSegments)
+    const devPath2 = path.join(__dirname, '../resources', ...pathSegments)
+    
+    // 检查文件是否存在，优先使用 src/assets
+    if (fs.existsSync(devPath1)) {
+      return devPath1
+    } else if (fs.existsSync(devPath2)) {
+      return devPath2
+    } else {
+      // 兜底路径
+      return devPath1
+    }
+  } else {
+    // 生产环境：从 process.resourcesPath 获取
+    return path.join(process.resourcesPath, ...pathSegments)
+  }
+}
+
 // 创建系统托盘
 const createTray = () => {
   // 获取托盘图标路径
   const getTrayIconPath = () => {
     if (process.platform === 'win32') {
-      return path.join(__dirname, '../resources/icons/32x32.png')
+      return getResourcePath('icons', '32x32.png')
     } else if (process.platform === 'darwin') {
-      return path.join(__dirname, '../resources/icons/16x16.png')
+      return getResourcePath('icons', '16x16.png')
     } else {
-      return path.join(__dirname, '../resources/icons/32x32.png')
+      return getResourcePath('icons', '32x32.png')
     }
   }
 
   const iconPath = getTrayIconPath()
+  console.log('托盘图标路径:', iconPath)
+  console.log('图标文件是否存在:', fs.existsSync(iconPath))
   
   // 创建托盘图标
   tray = new Tray(iconPath)
   
   // 设置托盘提示文本
-  tray.setToolTip('Port Forwarder - 端口转发工具')
+  tray.setToolTip('Tunnel Proxy - 端口转发工具')
   
   // 创建托盘右键菜单
   const contextMenu = Menu.buildFromTemplate([
@@ -85,7 +142,7 @@ const createTray = () => {
       click: () => {
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
-            alert('Port Forwarder v${require('../package.json').version}\\n\\n一个简单易用的端口转发工具\\n支持本地转发和SSH反向转发');
+            alert('Tunnel Proxy v${require('../package.json').version}\\n\\n一个简单易用的端口转发工具\\n支持本地转发和SSH反向转发');
           `)
           mainWindow.show()
           mainWindow.focus()
@@ -135,18 +192,23 @@ const createWindow = () => {
   // 获取图标路径
   const getIconPath = () => {
     if (process.platform === 'win32') {
-      return path.join(__dirname, '../resources/icons/icon.ico')
+      return getResourcePath('icons', 'icon.ico')
     } else if (process.platform === 'darwin') {
-      return path.join(__dirname, '../resources/icons/icon.icns')
+      return getResourcePath('icons', 'icon.icns')
     } else {
-      return path.join(__dirname, '../resources/icons/512x512.png')
+      return getResourcePath('icons', '512x512.png')
     }
   }
+
+  const iconPath = getIconPath()
+  console.log('主窗口图标路径:', iconPath)
+  console.log('主窗口图标文件是否存在:', fs.existsSync(iconPath))
 
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    icon: getIconPath(),
+    icon: iconPath,
+    autoHideMenuBar:true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: true,
@@ -157,7 +219,7 @@ const createWindow = () => {
     show: false,
     backgroundColor: '#fff',
     // 添加窗口标题
-    title: 'Port Forwarder',
+    title: 'Tunnel Proxy',
   })
 
   // 配置 session
@@ -184,7 +246,7 @@ const createWindow = () => {
       if (!mainWindow.hasShownTrayNotification) {
         tray.displayBalloon({
           iconType: 'info',
-          title: 'Port Forwarder',
+          title: 'Tunnel Proxy',
           content: '应用程序已最小化到系统托盘，点击托盘图标可以重新打开'
         })
         mainWindow.hasShownTrayNotification = true
@@ -193,14 +255,58 @@ const createWindow = () => {
     }
   })
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
-    if (process.env.NODE_ENV === 'development') {
-      mainWindow.webContents.openDevTools()
+  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+  const devUrl = process.env.VITE_DEV_SERVER_URL || (isDev ? 'http://localhost:5173' : null)
+
+  console.log('VITE_DEV_SERVER_URL:', process.env.VITE_DEV_SERVER_URL)
+  console.log('NODE_ENV:', process.env.NODE_ENV)
+
+  if (devUrl) {
+    mainWindow.loadURL(devUrl)
+    if (isDev) {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  // 页面加载成功后兜底显示
+  mainWindow.webContents.on('did-finish-load', () => {
+    try {
+      if (!mainWindow.isVisible()) {
+        mainWindow.show()
+      }
+    } catch (e) {
+      console.error('did-finish-load 显示窗口失败:', e)
+    }
+  })
+
+  // 页面加载失败时自动重试一次（开发模式）
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('页面加载失败:', { errorCode, errorDescription, validatedURL })
+    if (devUrl) {
+      setTimeout(() => {
+        try {
+          console.log('重试加载开发服务器:', devUrl)
+          mainWindow.loadURL(devUrl)
+        } catch (e) {
+          console.error('重试加载失败:', e)
+        }
+      }, 500)
+    }
+  })
+
+  // 超时兜底强制显示，避免 ready-to-show 未触发导致窗口不出现
+  setTimeout(() => {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+        console.warn('超时兜底：强制显示窗口')
+        mainWindow.show()
+      }
+    } catch (e) {
+      console.error('超时兜底显示失败:', e)
+    }
+  }, 3000)
 
   mainWindow.webContents.setWindowOpenHandler(() => {
     return { action: 'deny' }
@@ -257,18 +363,7 @@ app.whenReady().then(() => {
   });
 });
 
-// 防止重复启动应用
-const gotTheLock = app.requestSingleInstanceLock()
-if (!gotTheLock) {
-  app.quit()
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-    }
-  })
-}
+// 单实例逻辑已提前处理（见文件顶部）
 
 app.on('window-all-closed', () => {
   // 在 Windows 和 Linux 下，当所有窗口关闭时不退出应用

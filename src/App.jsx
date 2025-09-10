@@ -346,7 +346,7 @@ function App() {
             <div className="flex items-center space-x-3">
              
               <Title level={3} style={{ margin: 0 }} className="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
-              <LinkOutlined className="text-2xl text-white" /> {t('Port Forwarder')}
+              <LinkOutlined className="text-2xl text-white" /> {t('Tunnel Proxy')}
               </Title>
 
               <div className="flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full right-lang">

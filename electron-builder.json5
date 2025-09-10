@@ -1,6 +1,6 @@
 {
   "appId": "com.electron.port-forwarder",
-  "productName": "Port Forwarder",
+  "productName": "Tunnel Proxy",
   "copyright": "Copyright © 2024 ${author}",
   "asar": true,
   "directories": {
@@ -32,7 +32,7 @@
     "deleteAppDataOnUninstall": false,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "Port Forwarder"
+    "shortcutName": "Tunnel Proxy"
   },
   "publish": null
 } 

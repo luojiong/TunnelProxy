@@ -1,6 +1,6 @@
 export default {
   translation: {
-    "Port Forwarder": "端口转发器",
+    "Tunnel Proxy": "端口转发器",
     "Add Rule": "添加转发规则",
     "Remote Host": "远程主机",
     "Remote Host user@host example": "远程主机（反向 SSH：user@host，例如 root@1.2.3.4）",

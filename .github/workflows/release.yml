@@ -154,7 +154,7 @@ jobs:
           tag_name: v${{ steps.package_version.outputs.version }}
           name: Release v${{ steps.package_version.outputs.version }}
           body: |
-            ## 🚀 Port Forwarder v${{ steps.package_version.outputs.version }}
+            ## 🚀 Tunnel Proxy v${{ steps.package_version.outputs.version }}
 
             ### 📦 下载地址 / Downloads
             支持多平台和多架构：
