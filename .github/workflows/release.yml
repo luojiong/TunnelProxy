@@ -1,0 +1,152 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build application
+        run: yarn build
+
+      - name: Get package version
+        id: package_version
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Build Electron app for specific platform
+        run: |
+          if [ "${{ matrix.platform }}" == "linux" ]; then
+            yarn build:linux
+          elif [ "${{ matrix.platform }}" == "win" ]; then
+            yarn build:win
+          elif [ "${{ matrix.platform }}" == "mac" ]; then
+            yarn build:mac
+          fi
+        shell: bash
+
+      - name: List release files
+        run: |
+          echo "Release directory contents:"
+          ls -la release/ || echo "No release directory found"
+        shell: bash
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-release
+          path: release/
+          retention-days: 7
+
+  create-release:
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get package version
+        id: package_version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -la ./artifacts
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ steps.package_version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create tag and release
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          TAG_NAME="v${{ steps.package_version.outputs.version }}"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.package_version.outputs.version }}
+          name: Release v${{ steps.package_version.outputs.version }}
+          body: |
+            ## 🚀 Port Forwarder v${{ steps.package_version.outputs.version }}
+
+            ### 📦 下载地址 / Downloads
+            支持多平台和多架构：
+            - **Windows**: 支持 x64 和 ARM64 架构
+            - **macOS**: 支持 Intel (x64) 和 Apple Silicon (ARM64)
+            - **Linux**: 支持 x64 和 ARM64，提供 AppImage, DEB, RPM 格式
+
+            ### 🔄 更新内容 / Changelog
+            - 自动构建和发布
+            - 多平台支持 (Windows, macOS, Linux)
+            - 多架构支持 (x64, ARM64)
+
+            ### 🛠️ 安装说明 / Installation
+            1. 下载对应平台的安装包
+            2. 按照平台标准流程安装
+            3. 运行应用程序
+
+            ---
+            **构建时间**: ${{ github.event.head_commit.timestamp }}  
+            **提交**: ${{ github.sha }}
+          files: |
+            ./artifacts/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

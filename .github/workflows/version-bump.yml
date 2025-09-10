@@ -1,0 +1,75 @@
+name: Version Bump and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      custom_version:
+        description: 'Custom version (optional, overrides version_type)'
+        required: false
+        type: string
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Bump version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.custom_version }}" ]; then
+            # Use custom version
+            NEW_VERSION="${{ github.event.inputs.custom_version }}"
+            yarn version --new-version $NEW_VERSION --no-git-tag-version
+          else
+            # Use version bump type
+            yarn version --${{ github.event.inputs.version_type }} --no-git-tag-version
+          fi
+          
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Commit version bump
+        run: |
+          git add package.json
+          git commit -m "🔖 Bump version to v${{ steps.version.outputs.new_version }}"
+          git push origin main
+
+      - name: Create and push tag
+        run: |
+          TAG_NAME="v${{ steps.version.outputs.new_version }}"
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+
+      - name: Trigger release workflow
+        run: |
+          echo "Version bump completed. Release workflow will be triggered automatically."
