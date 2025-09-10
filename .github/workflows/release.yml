@@ -176,7 +176,14 @@ jobs:
             **构建时间**: ${{ github.event.head_commit.timestamp }}  
             **提交**: ${{ github.sha }}
           files: |
-            ./artifacts/**/*
+            ./artifacts/windows-release/**/*.exe
+            ./artifacts/windows-release/**/*.msi
+            ./artifacts/macos-release/**/*.dmg
+            ./artifacts/macos-release/**/*.zip
+            ./artifacts/linux-release/**/*.AppImage
+            ./artifacts/linux-release/**/*.deb
+            ./artifacts/linux-release/**/*.rpm
+          fail_on_unmatched_files: false
           draft: false
           prerelease: false
         env:
