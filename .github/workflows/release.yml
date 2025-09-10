@@ -34,6 +34,26 @@ jobs:
       - name: Build application (Vite)
         run: yarn build
 
+      - name: Ensure build/icon.ico exists (resolve from candidates)
+        shell: pwsh
+        run: |
+          if (-Not (Test-Path -Path "build")) { New-Item -ItemType Directory -Path "build" | Out-Null }
+          $dest = "build/icon.ico"
+          if (-Not (Test-Path -Path $dest)) {
+            $candidates = @(
+              "src/assets/icons/icon.ico",
+              "resources/icons/icon.ico"
+            )
+            $found = $null
+            foreach ($p in $candidates) { if (Test-Path -Path $p) { $found = $p; break } }
+            if ($null -ne $found) {
+              Copy-Item -Path $found -Destination $dest -Force
+              Write-Host "Copied $found -> $dest"
+            } else {
+              throw "No icon.ico found in candidates: $($candidates -join ', ')"
+            }
+          }
+
       - name: Verify icon exists
         run: |
           if (-Not (Test-Path -Path "build/icon.ico")) { throw "build/icon.ico not found" }
