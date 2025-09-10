@@ -1,0 +1,60 @@
+name: Build Windows Only (Testing)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ develop, feature/* ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Build application
+        run: yarn build
+
+      - name: Build Windows apps (x64 + ARM64)
+        run: yarn build:win-only
+
+      - name: List release files
+        run: |
+          echo "Release directory contents:"
+          dir release\ /s || echo "No release directory found"
+        shell: cmd
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-build
+          path: release/
+          retention-days: 3
+
+      - name: Build summary
+        run: |
+          echo "## 🎉 Windows Build Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Generated Files:" >> $GITHUB_STEP_SUMMARY
+          echo "- Windows x64 installer" >> $GITHUB_STEP_SUMMARY
+          echo "- Windows ARM64 installer" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⬇️ Download:" >> $GITHUB_STEP_SUMMARY
+          echo "Check the 'Artifacts' section below to download the builds." >> $GITHUB_STEP_SUMMARY
+        shell: bash
