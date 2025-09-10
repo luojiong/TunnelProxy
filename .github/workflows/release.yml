@@ -176,7 +176,8 @@ jobs:
             **构建时间**: ${{ github.event.head_commit.timestamp }}  
             **提交**: ${{ github.sha }}
           files: |
-            ./artifacts/windows-release/**/*.exe
+            # 仅上传 Windows 安装器（避免 win-unpacked 内的重复 exe 如 pagent.exe/elevate.exe）
+            ./artifacts/windows-release/**/*Setup*.exe
             ./artifacts/windows-release/**/*.msi
             ./artifacts/macos-release/**/*.dmg
             ./artifacts/macos-release/**/*.zip
