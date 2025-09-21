@@ -542,7 +542,7 @@ const startReverseSSH = (params, event = null) => {
     sshPassword,
     authType = 'password',
     keyPath,
-    remoteBindHost = '127.0.0.1',
+    remoteBindHost = '0.0.0.0',
     remotePort,
     localPort,
     id: customId
