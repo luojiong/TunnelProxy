@@ -1,7 +1,7 @@
 {
   "name": "tunnel-proxy",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "main": "dist-electron/main.js",
   "description": "A port forwarding tool built with Electron",
   "author": {
